@@ -12,14 +12,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
+@CrossOrigin(origins ="http://localhost:5173")
 @RestController
 @RequestMapping("/projetos")
 @RequiredArgsConstructor
 public class ProjetoController {
 
     private final ProjetoService projetoService;
-
-    // CRUD de Projetos
 
     @GetMapping
     public ResponseEntity<List<ProjetoResponse>> listarTodos() {
