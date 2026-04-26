@@ -11,30 +11,38 @@ import com.api.projeto.entity.TipoProjeto;
 import com.api.projeto.exception.RecursoNaoEncontradoException;
 import com.api.projeto.repository.ProjetoRepository;
 import com.api.projeto.repository.ProjetoUsuarioRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class ProjetoServiceImpl implements ProjetoService {
 
     private final ProjetoRepository projetoRepository;
     private final ProjetoUsuarioRepository projetoUsuarioRepository;
 
+    public ProjetoServiceImpl(ProjetoRepository projetoRepository, ProjetoUsuarioRepository projetoUsuarioRepository) {
+        this.projetoRepository = projetoRepository;
+        this.projetoUsuarioRepository = projetoUsuarioRepository;
+    }
+
     @Override
+    @Cacheable(value = "projetos")
     public List<ProjetoResponse> listarTodos() {
         return projetoRepository.findAll().stream().map(this::toResponse).toList();
     }
 
     @Override
+    @Cacheable(value = "projeto", key = "#id")
     public ProjetoResponse buscarPorId(Integer id) {
         return toResponse(buscarOuLancar(id));
     }
 
     @Override
+    @CacheEvict(value = {"projetos", "projeto", "projeto-usuarios"}, allEntries = true)
     public ProjetoResponse criar(ProjetoRequest request) {
         validarDatas(request.dataInicio(), request.dataFim());
         validarTipoProjeto(request);
@@ -55,6 +63,7 @@ public class ProjetoServiceImpl implements ProjetoService {
     }
 
     @Override
+    @CacheEvict(value = {"projetos", "projeto", "projeto-usuarios"}, allEntries = true)
     public ProjetoResponse atualizar(Integer id, ProjetoRequest request) {
         Projeto projeto = buscarOuLancar(id);
         validarDatas(request.dataInicio(), request.dataFim());
@@ -74,12 +83,14 @@ public class ProjetoServiceImpl implements ProjetoService {
     }
 
     @Override
+    @CacheEvict(value = {"projetos", "projeto", "projeto-usuarios"}, allEntries = true)
     public void deletar(Integer id) {
         buscarOuLancar(id);
         projetoRepository.deleteById(id);
     }
 
     @Override
+    @CacheEvict(value = "projeto-usuarios", key = "#projetoId")
     public ProjetoUsuarioResponse adicionarUsuario(Integer projetoId, ProjetoUsuarioRequest request) {
         buscarOuLancar(projetoId);
         ProjetoUsuarioId pkId = new ProjetoUsuarioId(projetoId, request.usuarioId());
@@ -94,6 +105,7 @@ public class ProjetoServiceImpl implements ProjetoService {
     }
 
     @Override
+    @CacheEvict(value = "projeto-usuarios", key = "#projetoId")
     public void removerUsuario(Integer projetoId, Integer usuarioId) {
         ProjetoUsuarioId pkId = new ProjetoUsuarioId(projetoId, usuarioId);
         if (!projetoUsuarioRepository.existsById(pkId)) {
@@ -104,13 +116,13 @@ public class ProjetoServiceImpl implements ProjetoService {
     }
 
     @Override
+    @Cacheable(value = "projeto-usuarios", key = "#projetoId")
     public List<ProjetoUsuarioResponse> listarUsuarios(Integer projetoId) {
         buscarOuLancar(projetoId);
         return projetoUsuarioRepository.findByIdProjetoId(projetoId)
                 .stream().map(this::toUsuarioResponse).toList();
     }
 
-    // Lança 404 se o projeto não existir
     private Projeto buscarOuLancar(Integer id) {
         return projetoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Projeto não encontrado: id=" + id));
@@ -122,7 +134,6 @@ public class ProjetoServiceImpl implements ProjetoService {
         }
     }
 
-    // Regras de negócio por tipo de projeto
     private void validarTipoProjeto(ProjetoRequest request) {
         if (request.tipoProjeto() == TipoProjeto.HORA_FECHADA && request.horasContratadas() == null) {
             throw new IllegalArgumentException(
@@ -135,18 +146,19 @@ public class ProjetoServiceImpl implements ProjetoService {
     }
 
     private ProjetoResponse toResponse(Projeto p) {
-    BigDecimal valorTotal = null;
-    if (p.getTipoProjeto() == TipoProjeto.HORA_FECHADA && p.getHorasContratadas() != null) {
-        valorTotal = p.getValorHoraBase()
-                .multiply(p.getHorasContratadas())
-                .setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal valorTotal = null;
+        if (p.getTipoProjeto() == TipoProjeto.HORA_FECHADA && p.getHorasContratadas() != null) {
+            valorTotal = p.getValorHoraBase()
+                    .multiply(p.getHorasContratadas())
+                    .setScale(2, java.math.RoundingMode.HALF_UP);
         }
-    return new ProjetoResponse(
-        p.getId(), p.getNome(), p.getCodigo(), p.getTipoProjeto(),
-        p.getValorHoraBase(), p.getHorasContratadas(), valorTotal,
-        p.getDataInicio(), p.getDataFim(), p.getResponsavelId()
+        return new ProjetoResponse(
+            p.getId(), p.getNome(), p.getCodigo(), p.getTipoProjeto(),
+            p.getValorHoraBase(), p.getHorasContratadas(), valorTotal,
+            p.getDataInicio(), p.getDataFim(), p.getResponsavelId()
         );
     }
+
     private ProjetoUsuarioResponse toUsuarioResponse(ProjetoUsuario pu) {
         return new ProjetoUsuarioResponse(
             pu.getId().getProjetoId(), pu.getId().getUsuarioId(), pu.getValorHora()
