@@ -10,7 +10,6 @@ public record ProjetoRequest(
     @NotBlank @Size(max = 7)   String codigo,
     @NotNull                   TipoProjeto tipoProjeto,
     @NotNull @Positive         BigDecimal valorHoraBase,
-    // Obrigatório para hora_fechada, proibido para alocacao — validado no service
     @Positive                  BigDecimal horasContratadas,
     @NotNull                   LocalDate dataInicio,
     @NotNull                   LocalDate dataFim,
